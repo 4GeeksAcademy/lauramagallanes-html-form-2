@@ -1,37 +1,54 @@
+import os
+import subprocess
+from flask import Flask, send_from_directory
+
+# Check if Flask is installed, and install it if not
 try:
-    # try to import flask, or return error if has not been installed
     from flask import Flask
-    from flask import send_from_directory
 except ImportError:
-    print("You don't have Flask installed, run `$ pip3 install flask` and try again")
+    print("Flask is not installed. You can install it with: pip3 install flask")
     exit(1)
 
-import os, subprocess
+app = Flask(__name__)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching
 
 static_file_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), './')
-app = Flask(__name__)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 #disable cache
 
 # Serving the index file
 @app.route('/', methods=['GET'])
 def serve_dir_directory_index():
     if os.path.exists("app.py"):
-        # if app.py exists we use the render function
-        out = subprocess.Popen(['python3','app.py'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        stdout,stderr = out.communicate()
-        return stdout if out.returncode == 0 else f"<pre style='color: red;'>{stdout.decode('utf-8')}</pre>"
+        # If app.py exists, run it and return the output
+        out = subprocess.Popen(['python3', 'app.py'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        stdout, stderr = out.communicate()
+        if out.returncode == 0:
+            return stdout
+        else:
+            return f"<pre style='color: red;'>{stdout.decode('utf-8')}</pre>"
+    
     if os.path.exists("index.html"):
         return send_from_directory(static_file_dir, 'index.html')
     else:
-        return "<h1 align='center'>404</h1><h2 align='center'>Missing index.html file</h2><p align='center'><img src='https://github.com/4GeeksAcademy/html-hello/blob/main/.vscode/rigo-baby.jpeg?raw=true' /></p>"
+        return """
+            <h1 align='center'>404</h1>
+            <h2 align='center'>Missing index.html file</h2>
+            <p align='center'><img src='https://github.com/4GeeksAcademy/html-hello/blob/main/.vscode/rigo-baby.jpeg?raw=true' /></p>
+        """
 
-# Serving any other image
+# Serving any other image or file
 @app.route('/<path:path>', methods=['GET'])
 def serve_any_other_file(path):
-    if not os.path.isfile(os.path.join(static_file_dir, path)):
-        path = os.path.join(path, 'index.html')
+    full_path = os.path.join(static_file_dir, path)
+    if not os.path.isfile(full_path):
+        # If the path is a directory, serve its index.html if it exists
+        index_html_path = os.path.join(full_path, 'index.html')
+        if os.path.exists(index_html_path):
+            return send_from_directory(static_file_dir, os.path.join(path, 'index.html'))
+        return "Not Found", 404
+
     response = send_from_directory(static_file_dir, path)
-    response.cache_control.max_age = 0 # avoid cache memory
+    response.cache_control.max_age = 0  # Avoid caching
     return response
 
-app.run(host='0.0.0.0',port=3000, debug=True, extra_files=['./',])
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=3000, debug=True, extra_files=['./'])
